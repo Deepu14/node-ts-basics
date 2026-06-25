@@ -1,3 +1,5 @@
 node_modules
 dist
 .DS_Store
+eslint-report.html
+eslint-report.json
