@@ -62,15 +62,21 @@ jobs:
         run: |
           ROWS=""
           current_test=""
+          current_status="✅ Pass"
           while IFS= read -r line; do
             if [[ "$line" == "# "* ]]; then
+              if [ -n "$current_test" ]; then
+                ROWS+="| $current_test | $current_status |\n"
+              fi
               current_test="${line:2}"
-            elif [[ "$line" == "ok "* ]]; then
-              ROWS+="| $current_test | ✅ Pass |\n"
+              current_status="✅ Pass"
             elif [[ "$line" == "not ok "* ]]; then
-              ROWS+="| $current_test | ❌ Fail |\n"
+              current_status="❌ Fail"
             fi
           done < tap-output.txt
+          if [ -n "$current_test" ]; then
+            ROWS+="| $current_test | $current_status |\n"
+          fi
 
           SUMMARY=$(grep -E "^# (tests|pass|fail)" tap-output.txt | sed 's/^# //' | tr '\n' ' ')
 
