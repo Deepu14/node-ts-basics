@@ -55,6 +55,43 @@ jobs:
         if: always()
         run: npx tap-junit --input tap-output.txt --output test-results.xml --name "User Service Tests"
 
+      - name: Post test results as PR comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ROWS=""
+          current_test=""
+          while IFS= read -r line; do
+            if [[ "$line" == "# "* ]]; then
+              current_test="${line:2}"
+            elif [[ "$line" == "ok "* ]]; then
+              ROWS+="| $current_test | ✅ Pass |\n"
+            elif [[ "$line" == "not ok "* ]]; then
+              ROWS+="| $current_test | ❌ Fail |\n"
+            fi
+          done < tap-output.txt
+
+          SUMMARY=$(grep -E "^# (tests|pass|fail)" tap-output.txt | sed 's/^# //' | tr '\n' ' ')
+
+          if [ -z "$TEST_FAILED" ]; then
+            RESULT="✅ All tests passed."
+          else
+            RESULT="❌ Some tests failed."
+          fi
+
+          {
+            echo "## Test Report"
+            echo ""
+            echo "$RESULT  |  $SUMMARY"
+            echo ""
+            echo "| Test | Status |"
+            echo "|------|--------|"
+            printf "$ROWS"
+          } > /tmp/test-report.md
+
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/test-report.md
+
       - name: Publish test report
         uses: mikepenz/action-junit-report@v4
         if: always()
