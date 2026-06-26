@@ -60,40 +60,83 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ROWS=""
+          PASS_ROWS=""
+          FAIL_ROWS=""
+          PASS_COUNT=0
+          FAIL_COUNT=0
           current_test=""
-          current_status="✅ Pass"
+          current_status="pass"
+
           while IFS= read -r line; do
             if [[ "$line" == "# "* ]]; then
-              if [ -n "$current_test" ]; then
-                ROWS+="| $current_test | $current_status |\n"
+              test_name="${line:2}"
+              if [[ "$test_name" =~ ^(tests|pass|fail)[[:space:]][0-9]+$ ]]; then
+                continue
               fi
-              current_test="${line:2}"
-              current_status="✅ Pass"
+              if [ -n "$current_test" ]; then
+                if [ "$current_status" = "pass" ]; then
+                  PASS_COUNT=$((PASS_COUNT + 1))
+                  PASS_ROWS+="| $PASS_COUNT | $current_test |\n"
+                else
+                  FAIL_COUNT=$((FAIL_COUNT + 1))
+                  FAIL_ROWS+="| $FAIL_COUNT | $current_test |\n"
+                fi
+              fi
+              current_test="$test_name"
+              current_status="pass"
             elif [[ "$line" == "not ok "* ]]; then
-              current_status="❌ Fail"
+              current_status="fail"
             fi
           done < tap-output.txt
+
           if [ -n "$current_test" ]; then
-            ROWS+="| $current_test | $current_status |\n"
+            if [ "$current_status" = "pass" ]; then
+              PASS_COUNT=$((PASS_COUNT + 1))
+              PASS_ROWS+="| $PASS_COUNT | $current_test |\n"
+            else
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+              FAIL_ROWS+="| $FAIL_COUNT | $current_test |\n"
+            fi
           fi
 
-          SUMMARY=$(grep -E "^# (tests|pass|fail)" tap-output.txt | sed 's/^# //' | tr '\n' ' ')
+          TOTAL=$((PASS_COUNT + FAIL_COUNT))
 
-          if [ -z "$TEST_FAILED" ]; then
-            RESULT="✅ All tests passed."
+          if [ "$FAIL_COUNT" -eq 0 ]; then
+            RESULT="✅ All tests passed"
           else
-            RESULT="❌ Some tests failed."
+            RESULT="❌ Some tests failed"
           fi
 
           {
-            echo "## Test Report"
+            echo "## 🧪 Test Report"
             echo ""
-            echo "$RESULT  |  $SUMMARY"
+            echo "$RESULT"
             echo ""
-            echo "| Test | Status |"
-            echo "|------|--------|"
-            printf "$ROWS"
+            echo "| Total | ✅ Passed | ❌ Failed |"
+            echo "|-------|-----------|-----------|"
+            echo "| $TOTAL | $PASS_COUNT | $FAIL_COUNT |"
+
+            if [ "$FAIL_COUNT" -gt 0 ]; then
+              echo ""
+              echo "<details open>"
+              echo "<summary>❌ Failed Tests ($FAIL_COUNT)</summary>"
+              echo ""
+              echo "| # | Test |"
+              echo "|---|------|"
+              printf "$FAIL_ROWS"
+              echo ""
+              echo "</details>"
+            fi
+
+            echo ""
+            echo "<details>"
+            echo "<summary>✅ Passed Tests ($PASS_COUNT)</summary>"
+            echo ""
+            echo "| # | Test |"
+            echo "|---|------|"
+            printf "$PASS_ROWS"
+            echo ""
+            echo "</details>"
           } > /tmp/test-report.md
 
           gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/test-report.md
