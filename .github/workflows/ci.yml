@@ -24,9 +24,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          OUTPUT=$(npx eslint src/**/*.ts 2>&1 || true)
+          OUTPUT=$(npx eslint src/**/*.ts 2>&1) || ESLINT_EXIT=$?
 
-          if [ -z "$OUTPUT" ]; then
+          if [ -z "$ESLINT_EXIT" ]; then
             STATUS="✅ No ESLint issues found."
           else
             STATUS=$(printf '❌ ESLint issues found:\n```\n%s\n```' "$OUTPUT")
@@ -44,6 +44,8 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/eslint-report.md
           fi
+
+          exit ${ESLINT_EXIT:-0}
 
       - name: Run tests
         run: npx tsx src/tests/userService.test.ts
