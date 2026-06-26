@@ -49,7 +49,10 @@ jobs:
           exit ${ESLINT_EXIT:-0}
 
       - name: Run tests
-        run: npx tsx src/tests/userService.test.ts | npx tap-junit --name "User Service Tests" > test-results.xml; exit ${PIPESTATUS[0]}
+        run: |
+          npx tsx src/tests/userService.test.ts > /tmp/tap-output.txt || TEST_FAILED=1
+          cat /tmp/tap-output.txt | npx tap-junit --name "User Service Tests" > test-results.xml
+          exit ${TEST_FAILED:-0}
 
       - name: Publish test report
         uses: dorny/test-reporter@v1
