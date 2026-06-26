@@ -49,11 +49,11 @@ jobs:
           exit ${ESLINT_EXIT:-0}
 
       - name: Run tests
-        run: npx tsx src/tests/userService.test.ts > /tmp/tap-output.txt || echo "TEST_FAILED=1" >> $GITHUB_ENV
+        run: npx tsx src/tests/userService.test.ts > tap-output.txt || echo "TEST_FAILED=1" >> $GITHUB_ENV
 
       - name: Convert TAP to JUnit
         if: always()
-        run: npx tap-junit --input /tmp/tap-output.txt --output test-results.xml --name "User Service Tests"
+        run: npx tap-junit --input tap-output.txt --output test-results.xml --name "User Service Tests"
 
       - name: Publish test report
         uses: dorny/test-reporter@v1
