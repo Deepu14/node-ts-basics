@@ -59,7 +59,7 @@ jobs:
         uses: mikepenz/action-junit-report@v4
         if: always()
         with:
-          report_paths: test-results.xml
+          report_paths: test-results.xml/*.xml
           fail_on_failure: true
 
       - name: Fail if tests failed
