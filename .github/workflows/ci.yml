@@ -49,10 +49,11 @@ jobs:
           exit ${ESLINT_EXIT:-0}
 
       - name: Run tests
-        run: |
-          npx tsx src/tests/userService.test.ts > /tmp/tap-output.txt || TEST_FAILED=1
-          cat /tmp/tap-output.txt | npx tap-junit --name "User Service Tests" > test-results.xml
-          exit ${TEST_FAILED:-0}
+        run: npx tsx src/tests/userService.test.ts > /tmp/tap-output.txt || echo "TEST_FAILED=1" >> $GITHUB_ENV
+
+      - name: Convert TAP to JUnit
+        if: always()
+        run: npx tap-junit --input /tmp/tap-output.txt --output test-results.xml --name "User Service Tests"
 
       - name: Publish test report
         uses: dorny/test-reporter@v1
@@ -61,3 +62,8 @@ jobs:
           name: Test Results
           path: test-results.xml
           reporter: java-junit
+          fail-on-error: true
+
+      - name: Fail if tests failed
+        if: env.TEST_FAILED == '1'
+        run: exit 1
