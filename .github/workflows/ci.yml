@@ -54,15 +54,20 @@ jobs:
           OUTPUT=$(npx tsx src/tests/userService.test.ts 2>&1) || TEST_EXIT=$?
 
           if [ -z "$TEST_EXIT" ]; then
-            STATUS="✅ All tests passed."
+            RESULT="✅ All tests passed."
           else
-            STATUS=$(printf '❌ Some tests failed:\n```\n%s\n```' "$OUTPUT")
+            RESULT="❌ Some tests failed."
           fi
 
           {
             echo "## Test Report"
             echo ""
-            echo "$STATUS"
+            echo "$RESULT"
+            echo ""
+            echo "**Details:**"
+            echo '```'
+            echo "$OUTPUT"
+            echo '```'
           } | tee /tmp/test-report.md >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
