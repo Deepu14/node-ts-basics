@@ -170,3 +170,43 @@ jobs:
       - name: Fail if tests failed
         if: env.TEST_FAILED == '1'
         run: exit 1
+
+      - name: Run coverage
+        if: always()
+        run: |
+          npx c8 --reporter=text --reporter=json-summary bash -c \
+            "$(find src/tests -name '*.test.ts' | sort | sed 's/^/npx tsx /' | tr '\n' '&' | sed 's/&$//')" \
+            > /tmp/coverage-text.txt 2>&1 || true
+
+      - name: Post coverage as PR comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SUMMARY=$(grep -A 9999 "File" /tmp/coverage-text.txt | grep -E "All files|\.ts" || true)
+
+          {
+            echo "## 📊 Coverage Report"
+            echo ""
+            echo "| File | Statements | Branches | Functions | Lines | Uncovered Lines |"
+            echo "|------|-----------|----------|-----------|-------|-----------------|"
+
+            grep -A 9999 "File" /tmp/coverage-text.txt | grep -E "\s+\|\s+[0-9]" | while IFS='|' read -r _ file stmts branch funcs lines uncov _; do
+              file=$(echo "$file" | xargs)
+              stmts=$(echo "$stmts" | xargs)
+              branch=$(echo "$branch" | xargs)
+              funcs=$(echo "$funcs" | xargs)
+              lines=$(echo "$lines" | xargs)
+              uncov=$(echo "$uncov" | xargs)
+
+              if [[ "$stmts" == "100" && "$branch" == "100" && "$funcs" == "100" && "$lines" == "100" ]]; then
+                icon="✅"
+              else
+                icon="⚠️"
+              fi
+
+              echo "| $icon $file | $stmts% | $branch% | $funcs% | $lines% | ${uncov:-—} |"
+            done
+          } > /tmp/coverage-report.md
+
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/coverage-report.md
