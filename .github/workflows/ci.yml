@@ -174,8 +174,16 @@ jobs:
       - name: Run coverage
         if: always()
         run: |
-          TEST_CMD=$(find src/tests -name "*.test.ts" | sort | sed 's/^/npx tsx /' | paste -sd ' && ')
+          TEST_CMD=""
+          for file in $(find src/tests -name "*.test.ts" | sort); do
+            if [ -z "$TEST_CMD" ]; then
+              TEST_CMD="npx tsx $file"
+            else
+              TEST_CMD="$TEST_CMD && npx tsx $file"
+            fi
+          done
           npx c8 --reporter=json-summary bash -c "$TEST_CMD" > /dev/null 2>&1 || true
+          cat coverage/coverage-summary.json || echo "coverage-summary.json not found"
 
       - name: Post coverage as PR comment
         if: always() && github.event_name == 'pull_request'
@@ -189,15 +197,15 @@ jobs:
             echo "|------|-----------|----------|-----------|-------|"
 
             jq -r '
-              to_entries |
-              map(select(.key == "total") + select(.key != "total")) |
+              ( [to_entries[] | select(.key == "total")] +
+                [to_entries[] | select(.key != "total")] ) |
               .[] |
               (.key | if . == "total" then "**All files**" else split("/") | last end) as $name |
               (.value.statements.pct | tostring) as $s |
               (.value.branches.pct | tostring) as $b |
               (.value.functions.pct | tostring) as $f |
               (.value.lines.pct | tostring) as $l |
-              (if (.value.statements.pct == 100 and .value.branches.pct == 100 and .value.functions.pct == 100 and .value.lines.pct == 100) then "✅" else "⚠️" end) as $icon |
+              (if (.value.statements.pct >= 100 and .value.branches.pct >= 100 and .value.functions.pct >= 100 and .value.lines.pct >= 100) then "✅" else "⚠️" end) as $icon |
               "| \($icon) \($name) | \($s)% | \($b)% | \($f)% | \($l)% |"
             ' coverage/coverage-summary.json
           } > /tmp/coverage-report.md
