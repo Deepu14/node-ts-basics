@@ -1,5 +1,6 @@
 import test from 'tape';
-import { isValidUser, filterUsersByAge, sortUsersByName } from '../utils/userUtils.js';
+// import { isValidUser, filterUsersByAge, sortUsersByName } from '../utils/userUtils.js';
+import { isValidUser} from '../utils/userUtils.js';
 
 const sampleUsers = [
     { name: 'Charlie', age: 30 },
