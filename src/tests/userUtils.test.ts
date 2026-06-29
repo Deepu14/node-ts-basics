@@ -2,11 +2,11 @@ import test from 'tape';
 // import { isValidUser, filterUsersByAge, sortUsersByName } from '../utils/userUtils.js';
 import { isValidUser} from '../utils/userUtils.js';
 
-const sampleUsers = [
-    { name: 'Charlie', age: 30 },
-    { name: 'Alice', age: 20 },
-    { name: 'Bob', age: 25 },
-];
+// const sampleUsers = [
+//     { name: 'Charlie', age: 30 },
+//     { name: 'Alice', age: 20 },
+//     { name: 'Bob', age: 25 },
+// ];
 
 test('isValidUser - valid user', (t) => {
     t.equal(isValidUser({ name: 'Alice', age: 25 }), true);
