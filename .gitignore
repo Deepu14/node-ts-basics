@@ -3,3 +3,4 @@ dist
 .DS_Store
 eslint-report.html
 eslint-report.json
+tap-output/

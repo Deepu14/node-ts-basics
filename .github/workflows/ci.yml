@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      checks: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -48,30 +49,124 @@ jobs:
           exit ${ESLINT_EXIT:-0}
 
       - name: Run tests
+        run: |
+          mkdir -p tap-output
+          for file in $(find src/tests -name "*.test.ts" | sort); do
+            name=$(basename "$file" .ts)
+            npx tsx "$file" > "tap-output/${name}.txt" || echo "TEST_FAILED=1" >> $GITHUB_ENV
+          done
+
+      - name: Convert TAP to JUnit
+        if: always()
+        run: |
+          mkdir -p test-results
+          for tapfile in tap-output/*.txt; do
+            name=$(basename "$tapfile" .txt)
+            npx tap-junit --input "$tapfile" --output "test-results/${name}" --name "$name"
+          done
+
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: test-results/**/*.xml
+          fail_on_failure: true
+
+      - name: Post test results as PR comment
+        if: always() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          OUTPUT=$(npx tsx src/tests/userService.test.ts 2>&1) || TEST_EXIT=$?
+          TOTAL_PASS=0
+          TOTAL_FAIL=0
+          FILE_SECTIONS=""
 
-          if [ -z "$TEST_EXIT" ]; then
-            RESULT="✅ All tests passed."
+          for tapfile in $(ls tap-output/*.txt | sort); do
+            filename=$(basename "$tapfile" .txt)
+
+            PASS_ROWS=""
+            FAIL_ROWS=""
+            PASS_COUNT=0
+            FAIL_COUNT=0
+            current_test=""
+            current_status="pass"
+
+            while IFS= read -r line; do
+              if [[ "$line" == "# "* ]]; then
+                test_name="${line:2}"
+                if [[ "$test_name" =~ ^(tests|pass|fail)[[:space:]][0-9]+$ ]]; then
+                  continue
+                fi
+                if [ -n "$current_test" ]; then
+                  if [ "$current_status" = "pass" ]; then
+                    PASS_COUNT=$((PASS_COUNT + 1))
+                    PASS_ROWS+="| ✅ | $current_test |\n"
+                  else
+                    FAIL_COUNT=$((FAIL_COUNT + 1))
+                    FAIL_ROWS+="| ❌ | $current_test |\n"
+                  fi
+                fi
+                current_test="$test_name"
+                current_status="pass"
+              elif [[ "$line" == "not ok "* ]]; then
+                current_status="fail"
+              fi
+            done < "$tapfile"
+
+            if [ -n "$current_test" ]; then
+              if [ "$current_status" = "pass" ]; then
+                PASS_COUNT=$((PASS_COUNT + 1))
+                PASS_ROWS+="| ✅ | $current_test |\n"
+              else
+                FAIL_COUNT=$((FAIL_COUNT + 1))
+                FAIL_ROWS+="| ❌ | $current_test |\n"
+              fi
+            fi
+
+            TOTAL_PASS=$((TOTAL_PASS + PASS_COUNT))
+            TOTAL_FAIL=$((TOTAL_FAIL + FAIL_COUNT))
+            FILE_TOTAL=$((PASS_COUNT + FAIL_COUNT))
+
+            if [ "$FAIL_COUNT" -gt 0 ]; then
+              ICON="❌"
+              OPEN="open"
+            else
+              ICON="✅"
+              OPEN=""
+            fi
+
+            FILE_SECTIONS+="<details $OPEN>\n"
+            FILE_SECTIONS+="<summary>$ICON $filename.ts — $FILE_TOTAL tests, $PASS_COUNT passed, $FAIL_COUNT failed</summary>\n\n"
+            FILE_SECTIONS+="| Status | Test |\n"
+            FILE_SECTIONS+="|--------|------|\n"
+            FILE_SECTIONS+="${FAIL_ROWS}${PASS_ROWS}"
+            FILE_SECTIONS+="\n</details>\n\n"
+          done
+
+          TOTAL=$((TOTAL_PASS + TOTAL_FAIL))
+
+          if [ "$TOTAL_FAIL" -eq 0 ]; then
+            RESULT="✅ All tests passed"
           else
-            RESULT="❌ Some tests failed."
+            RESULT="❌ Some tests failed"
           fi
 
           {
-            echo "## Test Report"
+            echo "## 🧪 Test Report"
             echo ""
             echo "$RESULT"
             echo ""
-            echo "**Details:**"
-            echo '```'
-            echo "$OUTPUT"
-            echo '```'
-          } | tee /tmp/test-report.md >> $GITHUB_STEP_SUMMARY
+            echo "| Total | ✅ Passed | ❌ Failed |"
+            echo "|-------|-----------|-----------|"
+            echo "| $TOTAL | $TOTAL_PASS | $TOTAL_FAIL |"
+            echo ""
+            echo "---"
+            echo ""
+            printf "$FILE_SECTIONS"
+          } > /tmp/test-report.md
 
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/test-report.md
-          fi
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/test-report.md
 
-          exit ${TEST_EXIT:-0}
+      - name: Fail if tests failed
+        if: env.TEST_FAILED == '1'
+        run: exit 1
