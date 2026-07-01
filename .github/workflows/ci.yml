@@ -21,6 +21,32 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run Snyk security scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm install -g snyk
+          OUTPUT=$(snyk test --severity-threshold=high 2>&1) || SNYK_FAILED=1
+
+          if [ -z "$SNYK_FAILED" ]; then
+            STATUS="✅ No high or critical vulnerabilities found."
+          else
+            STATUS=$(printf '❌ Vulnerabilities found:\n```\n%s\n```' "$OUTPUT")
+          fi
+
+          {
+            echo "## 🔒 Snyk Security Report"
+            echo ""
+            echo "$STATUS"
+          } | tee /tmp/snyk-report.md >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/snyk-report.md
+          fi
+
+          exit ${SNYK_FAILED:-0}
+
       - name: Run ESLint
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
