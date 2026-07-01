@@ -1,7 +1,5 @@
 import test from 'tape';
-import {getUsers,deleteUser,resetUsers} from '../services/userService.js';
-// import {getUsers,addUser,deleteUser,resetUsers} from '../services/userService.js';
-//import { get } from 'node:http';
+import {getUsers,addUser,deleteUser,resetUsers} from '../services/userService.js';
 
 resetUsers();
 test('testing getusers count',(t)=>{
@@ -25,14 +23,15 @@ test('testing getusers count',(t)=>{
 //     t.end();
 // })
 
-resetUsers();
 test('testing addusers members',(t)=>{
+    resetUsers();
+    addUser({name:"GHI",age:30});
     t.equal( getUsers()[0]?.name,"ABC");
     t.equal( getUsers()[0]?.age,20);
     t.equal( getUsers()[1]?.name,"DEF");
-    t.equal( getUsers()[1]?.age,25);  
+    t.equal( getUsers()[1]?.age,25);
     t.equal( getUsers()[2]?.name,"GHI");
-    t.equal( getUsers()[2]?.age,30);     
+    t.equal( getUsers()[2]?.age,30);
     t.end();
 })
 
