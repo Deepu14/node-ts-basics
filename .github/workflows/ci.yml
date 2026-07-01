@@ -27,29 +27,55 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm install -g snyk
-          DEP_OUTPUT=$(snyk test --severity-threshold=high 2>&1) || DEP_FAILED=1
-          CODE_OUTPUT=$(snyk code test 2>&1) || CODE_FAILED=1
-
-          if [ -z "$DEP_FAILED" ]; then
-            DEP_STATUS="✅ No high or critical dependency vulnerabilities found."
-          else
-            DEP_STATUS=$(printf '❌ Dependency vulnerabilities found:\n```\n%s\n```' "$DEP_OUTPUT")
-          fi
-
-          if [ -z "$CODE_FAILED" ]; then
-            CODE_STATUS="✅ No code vulnerabilities found."
-          else
-            CODE_STATUS=$(printf '❌ Code vulnerabilities found:\n```\n%s\n```' "$CODE_OUTPUT")
-          fi
+          snyk test --severity-threshold=high --json > /tmp/snyk-dep.json 2>&1 || DEP_FAILED=1
+          snyk code test --json > /tmp/snyk-code.json 2>&1 || CODE_FAILED=1
 
           {
             echo "## 🔒 Snyk Security Report"
             echo ""
-            echo "### Dependency Scan"
-            echo "$DEP_STATUS"
+
+            echo "### 📦 Dependency Vulnerabilities"
             echo ""
-            echo "### Code Scan"
-            echo "$CODE_STATUS"
+            if [ -z "$DEP_FAILED" ]; then
+              echo "✅ No high or critical dependency vulnerabilities found."
+            else
+              echo "| Severity | Package | Version | Vulnerability | Fix Available |"
+              echo "|----------|---------|---------|---------------|---------------|"
+              jq -r '
+                .vulnerabilities // [] |
+                sort_by(.severity) | reverse |
+                .[] |
+                (if .severity == "critical" then "🔴 Critical"
+                 elif .severity == "high" then "🟠 High"
+                 elif .severity == "medium" then "🟡 Medium"
+                 else "🔵 Low" end) as $sev |
+                (.fixedIn // [] | if length > 0 then "✅ " + .[0] else "❌ None" end) as $fix |
+                "| \($sev) | \(.packageName) | \(.version) | \(.title) | \($fix) |"
+              ' /tmp/snyk-dep.json 2>/dev/null || echo "| — | Could not parse dependency results | | | |"
+            fi
+
+            echo ""
+            echo "### 🧑‍💻 Code Vulnerabilities"
+            echo ""
+            if [ -z "$CODE_FAILED" ]; then
+              echo "✅ No code vulnerabilities found."
+            else
+              echo "| Severity | File | Line | Issue |"
+              echo "|----------|------|------|-------|"
+              jq -r '
+                .runs[0].results // [] |
+                .[] |
+                (.level // "warning") as $level |
+                (if $level == "error" then "🔴 High"
+                 elif $level == "warning" then "🟡 Medium"
+                 else "🔵 Low" end) as $sev |
+                .locations[0].physicalLocation |
+                .artifactLocation.uri as $file |
+                (.region.startLine | tostring) as $line |
+                "| \($sev) | \($file) | \($line) | \(.. | .text? // empty | first) |"
+              ' /tmp/snyk-code.json 2>/dev/null || echo "| — | Could not parse code results | | |"
+            fi
+
           } | tee /tmp/snyk-report.md >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
