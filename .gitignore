@@ -4,3 +4,4 @@ dist
 eslint-report.html
 eslint-report.json
 tap-output/
+coverage/

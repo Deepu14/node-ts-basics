@@ -8,7 +8,8 @@
     "start": "tsx src/index.ts",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "lint:report": "eslint src/**/*.ts --format html --output-file eslint-report.html || true && open eslint-report.html"
+    "lint:report": "eslint src/**/*.ts --format html --output-file eslint-report.html || true && open eslint-report.html",
+    "coverage": "c8 --reporter=text --reporter=html bash -c 'npx tsx src/tests/userService.test.ts && npx tsx src/tests/userUtils.test.ts'"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +20,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.3",
     "@types/tape": "^5.8.1",
+    "c8": "^11.0.0",
     "eslint": "^10.5.0",
     "tap-junit": "^5.0.4",
     "tape": "^5.10.1",
